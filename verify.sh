@@ -5,6 +5,12 @@ WORKDIR="$(cd "$(dirname "$0")" && pwd)"
 EXPECTED_DEFAULT_SERVICES=(mysql qdrant recsys-api bite-api harvester-go cloudflared backup)
 EXPECTED_BATCH_SERVICES=(mysql qdrant recsys-api bite-api harvester-go cloudflared backup dynamodb-local recommender)
 
+if docker compose version >/dev/null 2>&1; then
+  COMPOSE_CMD=(docker compose)
+else
+  COMPOSE_CMD=(docker-compose)
+fi
+
 verify_services() {
   local mode="$1"
   local services_str="$2"
@@ -39,8 +45,8 @@ EOF
   done
 }
 
-DEFAULT_SERVICES_STR="$(cd "$WORKDIR" && docker-compose config --services)"
-BATCH_SERVICES_STR="$(cd "$WORKDIR" && docker-compose --profile batch config --services)"
+DEFAULT_SERVICES_STR="$(cd "$WORKDIR" && "${COMPOSE_CMD[@]}" config --services)"
+BATCH_SERVICES_STR="$(cd "$WORKDIR" && "${COMPOSE_CMD[@]}" --profile batch config --services)"
 
 verify_services "default" "$DEFAULT_SERVICES_STR" "${EXPECTED_DEFAULT_SERVICES[@]}"
 verify_services "batch" "$BATCH_SERVICES_STR" "${EXPECTED_BATCH_SERVICES[@]}"

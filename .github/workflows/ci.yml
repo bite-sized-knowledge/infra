@@ -20,11 +20,11 @@ jobs:
 
       - name: Validate default compose
         working-directory: infra
-        run: docker-compose config --services
+        run: docker compose config --services
 
       - name: Validate batch profile compose
         working-directory: infra
-        run: docker-compose --profile batch config --services
+        run: docker compose --profile batch config --services
 
       - name: Verify expected services
         working-directory: infra
