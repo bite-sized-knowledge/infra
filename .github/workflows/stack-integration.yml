@@ -82,9 +82,27 @@ jobs:
           env_path.write_text('\n'.join(updated) + '\n')
           PY
 
-      - name: Start Docker stack
+      - name: Start base services
         working-directory: infra
-        run: docker compose up -d mysql qdrant recsys-api bite-api harvester-go
+        run: docker compose up -d mysql qdrant
+
+      - name: Wait for MySQL health
+        working-directory: infra
+        run: |
+          for i in $(seq 1 60); do
+            STATUS=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}unknown{{end}}' bite-mysql 2>/dev/null || true)
+            if [ "$STATUS" = "healthy" ]; then
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "mysql failed to become healthy"
+          docker compose logs --no-color mysql
+          exit 1
+
+      - name: Start application services
+        working-directory: infra
+        run: docker compose up -d recsys-api bite-api harvester-go
 
       - name: Wait for stack health
         working-directory: infra
