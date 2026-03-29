@@ -15,29 +15,8 @@ jobs:
         with:
           path: infra
 
-      - name: Checkout bite-api
-        uses: actions/checkout@v4
-        with:
-          repository: bite-sized-knowledge/bite-api
-          path: bite-api
-
-      - name: Checkout harvester-go
-        uses: actions/checkout@v4
-        with:
-          repository: bite-sized-knowledge/harvester-go
-          path: harvester-go
-
-      - name: Checkout recsys-serving
-        uses: actions/checkout@v4
-        with:
-          repository: bite-sized-knowledge/recsys-serving
-          path: recsys-serving
-
-      - name: Checkout recommender
-        uses: actions/checkout@v4
-        with:
-          repository: bite-sized-knowledge/recommender
-          path: recommender
+      - name: Create sibling build context placeholders
+        run: mkdir -p bite-api harvester-go recsys-serving recommender
 
       - name: Validate default compose
         working-directory: infra
