@@ -2,34 +2,47 @@
 set -euo pipefail
 
 WORKDIR="$(cd "$(dirname "$0")" && pwd)"
-EXPECTED_SERVICES=(mysql qdrant bite-api cloudflared recsys-api backup)
+EXPECTED_DEFAULT_SERVICES=(mysql qdrant recsys-api bite-api harvester-go cloudflared backup)
+EXPECTED_BATCH_SERVICES=(mysql qdrant recsys-api bite-api harvester-go cloudflared backup dynamodb-local recommender)
 
-ACTUAL_SERVICES_STR="$(cd "$WORKDIR" && docker-compose config --services)"
-ACTUAL_SERVICES=()
-while IFS= read -r line; do
-  ACTUAL_SERVICES+=("$line")
-done <<EOF
-$ACTUAL_SERVICES_STR
+verify_services() {
+  local mode="$1"
+  local services_str="$2"
+  shift 2
+  local -a expected=("$@")
+
+  local -a actual=()
+  while IFS= read -r line; do
+    actual+=("$line")
+  done <<EOF
+$services_str
 EOF
 
-if [ "${#ACTUAL_SERVICES[@]}" -ne "${#EXPECTED_SERVICES[@]}" ]; then
-  echo "unexpected service count: ${#ACTUAL_SERVICES[@]}"
-  printf 'actual: %s\n' "${ACTUAL_SERVICES[@]}"
-  exit 1
-fi
-
-for expected in "${EXPECTED_SERVICES[@]}"; do
-  found=false
-  for actual in "${ACTUAL_SERVICES[@]}"; do
-    if [ "$actual" = "$expected" ]; then
-      found=true
-      break
-    fi
-  done
-  if [ "$found" = false ]; then
-    echo "missing expected service: $expected"
+  if [ "${#actual[@]}" -ne "${#expected[@]}" ]; then
+    echo "[$mode] unexpected service count: ${#actual[@]}"
+    printf '[%s] actual: %s\n' "$mode" "${actual[@]}"
     exit 1
   fi
-done
 
-echo "compose services verified"
+  for expected_service in "${expected[@]}"; do
+    local found=false
+    for actual_service in "${actual[@]}"; do
+      if [ "$actual_service" = "$expected_service" ]; then
+        found=true
+        break
+      fi
+    done
+    if [ "$found" = false ]; then
+      echo "[$mode] missing expected service: $expected_service"
+      exit 1
+    fi
+  done
+}
+
+DEFAULT_SERVICES_STR="$(cd "$WORKDIR" && docker-compose config --services)"
+BATCH_SERVICES_STR="$(cd "$WORKDIR" && docker-compose --profile batch config --services)"
+
+verify_services "default" "$DEFAULT_SERVICES_STR" "${EXPECTED_DEFAULT_SERVICES[@]}"
+verify_services "batch" "$BATCH_SERVICES_STR" "${EXPECTED_BATCH_SERVICES[@]}"
+
+echo "compose services verified (default + batch profile)"

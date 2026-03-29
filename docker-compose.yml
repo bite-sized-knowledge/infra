@@ -36,6 +36,7 @@ services:
       - "8001:8001"
     depends_on:
       - qdrant
+      - mysql
     env_file:
       - .env
     healthcheck:
@@ -65,6 +66,56 @@ services:
       timeout: 5s
       retries: 10
       start_period: 20s
+    networks:
+      - bite-network
+
+  harvester-go:
+    build: ../harvester-go
+    container_name: bite-harvester
+    env_file:
+      - .env
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - bite-network
+
+  dynamodb-local:
+    image: amazon/dynamodb-local:latest
+    container_name: bite-dynamodb-local
+    command: ["-jar", "DynamoDBLocal.jar", "-sharedDb", "-dbPath", "/home/dynamodblocal/data"]
+    profiles: ["batch"]
+    volumes:
+      - dynamodb_data:/home/dynamodblocal/data
+    networks:
+      - bite-network
+
+  recommender:
+    build: ../recommender
+    container_name: bite-recommender
+    profiles: ["batch"]
+    env_file:
+      - .env
+    environment:
+      RDS_DATABASE: ${RDS_DATABASE:-bite}
+      RDS_HOST: ${RDS_HOST:-mysql}
+      RDS_USER: ${RDS_USER:-bite-dev}
+      RDS_PASSWORD: ${RDS_PASSWORD:-}
+      RDS_PORT: ${RDS_PORT:-3306}
+      QDRANT_ENDPOINT: ${QDRANT_ENDPOINT:-http://qdrant:6333}
+      QDRANT_API: ${QDRANT_API:-}
+      DYNAMODB_REGION: ${DYNAMODB_REGION:-ap-northeast-2}
+      DYNAMODB_ENDPOINT_URL: ${DYNAMODB_ENDPOINT_URL:-http://dynamodb-local:8000}
+      DYNAMODB_ACCESS_KEY_ID: ${DYNAMODB_ACCESS_KEY_ID:-dummy}
+      DYNAMODB_SECRET_ACCESS_KEY: ${DYNAMODB_SECRET_ACCESS_KEY:-dummy}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+      dynamodb-local:
+        condition: service_started
     networks:
       - bite-network
 
@@ -99,6 +150,7 @@ services:
 volumes:
   mysql_data:
   qdrant_data:
+  dynamodb_data:
 
 networks:
   bite-network:

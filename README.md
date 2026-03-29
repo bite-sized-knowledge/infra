@@ -8,18 +8,30 @@ This directory contains the home-server Docker Compose stack for Bite.
 - `qdrant`: vector database
 - `recsys-api`: FastAPI recommendation/search service
 - `bite-api`: Go API server
+- `harvester-go`: always-on RSS harvester (internal ticker via `HARVEST_INTERVAL`)
 - `cloudflared`: public tunnel for `api.bite-sized.xyz`
 - `backup`: nightly MySQL dumps
+- `dynamodb-local` (batch profile): local DynamoDB dependency for recommender batch runs
+- `recommender` (batch profile): offline profile/batch recommendation job
 
 ## Health endpoints
 
 - `bite-api`: `http://localhost:8080/actuator/health`
 - `recsys-api`: `http://localhost:8001/health`
 
-## Notes about harvester
+## Running profiles
 
-`harvest_post` / harvester work is intentionally **not** managed from this Compose file in the current session.
-It is being handled separately, so this stack keeps the integration surface stable without modifying harvester code.
+- Default (always-on stack):
+
+```bash
+docker-compose up -d
+```
+
+- Batch profile (includes recommender + local DynamoDB):
+
+```bash
+docker-compose --profile batch up --build recommender
+```
 
 ## Local verification
 
@@ -27,5 +39,6 @@ Run:
 
 ```bash
 docker-compose config --services
+docker-compose --profile batch config --services
 bash ./verify.sh
 ```
