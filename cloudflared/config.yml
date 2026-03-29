@@ -1,0 +1,7 @@
+tunnel: 554f1794-c5fb-4759-ba4c-6c88ccee59bb
+credentials-file: /etc/cloudflared/554f1794-c5fb-4759-ba4c-6c88ccee59bb.json
+
+ingress:
+  - hostname: api.bite-sized.xyz
+    service: http://bite-api:8080
+  - service: http_status:404
