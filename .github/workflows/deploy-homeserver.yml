@@ -4,7 +4,7 @@ on:
   push:
     branches: ["main"]
     paths:
-      - 'docker-compose.yml'
+      - 'docker compose.yml'
       - 'verify.sh'
       - 'backup/**'
       - 'cloudflared/**'
@@ -43,7 +43,7 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
           source: "."
-          target: "~/infra"
+          target: "~/projects/infra"
 
       - name: Apply compose stack on home server
         if: steps.deploy_guard.outputs.enabled == 'true'
@@ -55,18 +55,18 @@ jobs:
           key: ${{ secrets.SSH_KEY }}
           script: |
             set -e
-            cd ~/infra
-            BEFORE_QUEUE_COUNT=$(docker-compose exec -T mysql sh -lc 'mysql -Nse "SELECT COUNT(*) FROM article_queue" -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' | tr -d '\r')
+            cd ~/projects/infra
+            BEFORE_QUEUE_COUNT=$(docker compose exec -T mysql sh -lc 'mysql -Nse "SELECT COUNT(*) FROM article_queue" -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' | tr -d '\r')
             echo "article_queue before deploy: ${BEFORE_QUEUE_COUNT}"
-            docker-compose build bite-api recsys-api harvester-go
-            docker-compose up -d mysql qdrant recsys-api bite-api harvester-go backup cloudflared
+            docker compose build bite-api recsys-api harvester-go
+            docker compose up -d mysql qdrant recsys-api bite-api harvester-go backup cloudflared
             bash ./verify.sh
             ATTEMPTS=15
             for i in $(seq 1 $ATTEMPTS); do
               API_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/actuator/health || true)
               RECSYS_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8001/health || true)
               if [ "$API_STATUS" = "200" ] && [ "$RECSYS_STATUS" = "200" ]; then
-                docker-compose ps harvester-go | grep -q "Up"
+                docker compose ps harvester-go | grep -q "Up"
                 break
               fi
               sleep 4
@@ -78,15 +78,15 @@ jobs:
               exit 1
             fi
 
-            BITE_TO_RECSYS=$(docker-compose exec -T bite-api wget -qO- "http://recsys-api:8001/feeds?member_id=1")
+            BITE_TO_RECSYS=$(docker compose exec -T bite-api wget -qO- "http://recsys-api:8001/feeds?member_id=1")
             echo "bite-api -> recsys-api response: ${BITE_TO_RECSYS}"
             printf '%s' "$BITE_TO_RECSYS" | grep -q 'articles'
 
-            HARVESTER_LOGS=$(docker-compose logs --no-color --tail=200 harvester-go)
+            HARVESTER_LOGS=$(docker compose logs --no-color --tail=200 harvester-go)
             printf '%s\n' "$HARVESTER_LOGS"
             printf '%s' "$HARVESTER_LOGS" | grep -Eq 'harvester ticker started|rss loaded|default blog loaded|medium feed loaded|article harvested|existing article skipped'
 
-            AFTER_QUEUE_COUNT=$(docker-compose exec -T mysql sh -lc 'mysql -Nse "SELECT COUNT(*) FROM article_queue" -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' | tr -d '\r')
+            AFTER_QUEUE_COUNT=$(docker compose exec -T mysql sh -lc 'mysql -Nse "SELECT COUNT(*) FROM article_queue" -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' | tr -d '\r')
             echo "article_queue after deploy: ${AFTER_QUEUE_COUNT}"
             [ -n "$BEFORE_QUEUE_COUNT" ]
             [ -n "$AFTER_QUEUE_COUNT" ]
