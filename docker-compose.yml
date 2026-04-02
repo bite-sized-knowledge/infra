@@ -30,6 +30,7 @@ services:
       - bite-network
 
   recsys-api:
+    image: ghcr.io/bite-sized-knowledge/recsys-serving:latest
     build: ../recsys-serving
     container_name: bite-recsys
     ports:
@@ -49,6 +50,7 @@ services:
       - bite-network
 
   bite-api:
+    image: ghcr.io/bite-sized-knowledge/bite-api:latest
     build: ../bite-api
     container_name: bite-api
     ports:
@@ -70,6 +72,7 @@ services:
       - bite-network
 
   harvester-go:
+    image: ghcr.io/bite-sized-knowledge/harvester-go:latest
     build: ../harvester-go
     container_name: bite-harvester
     env_file:
@@ -92,6 +95,7 @@ services:
       - bite-network
 
   recommender:
+    image: ghcr.io/bite-sized-knowledge/recommender:latest
     build: ../recommender
     container_name: bite-recommender
     profiles: ["batch"]
