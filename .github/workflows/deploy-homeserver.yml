@@ -4,7 +4,7 @@ on:
   push:
     branches: ["main"]
     paths:
-      - 'docker compose.yml'
+      - 'docker-compose.yml'
       - 'verify.sh'
       - 'backup/**'
       - 'cloudflared/**'
@@ -17,9 +17,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout infra
-        uses: actions/checkout@v4
-
       - name: Check deploy secrets
         id: deploy_guard
         env:
@@ -34,17 +31,6 @@ jobs:
           fi
           echo "enabled=true" >> "$GITHUB_OUTPUT"
 
-      - name: Upload infra source
-        if: steps.deploy_guard.outputs.enabled == 'true'
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          port: ${{ secrets.SSH_PORT }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_KEY }}
-          source: "."
-          target: "~/projects/infra"
-
       - name: Apply compose stack on home server
         if: steps.deploy_guard.outputs.enabled == 'true'
         uses: appleboy/ssh-action@v1.2.0
@@ -56,6 +42,7 @@ jobs:
           script: |
             set -e
             cd ~/projects/infra
+            git pull origin main
             BEFORE_QUEUE_COUNT=$(docker compose exec -T mysql sh -lc 'mysql -Nse "SELECT COUNT(*) FROM article_queue" -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' | tr -d '\r')
             echo "article_queue before deploy: ${BEFORE_QUEUE_COUNT}"
             docker compose build bite-api recsys-api harvester-go
