@@ -62,6 +62,11 @@ services:
         condition: service_started
     env_file:
       - .env
+    environment:
+      - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID}
+      - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8080/actuator/health"]
       interval: 15s
@@ -123,6 +128,72 @@ services:
     networks:
       - bite-network
 
+  # === 운영계 웹 ===
+  bite-web:
+    image: ghcr.io/bite-sized-knowledge/bite-web:latest
+    build: ../bite-web
+    container_name: bite-web
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=https://api.bite-sized.xyz
+      - NEXT_PUBLIC_GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID}
+      - NEXT_PUBLIC_GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+    networks:
+      - bite-network
+    depends_on:
+      - bite-api
+    restart: unless-stopped
+
+  # === 개발계 API ===
+  bite-api-dev:
+    image: ghcr.io/bite-sized-knowledge/bite-api:latest
+    build: ../bite-api
+    container_name: bite-api-dev
+    ports:
+      - "8081:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_NAME=bite_dev
+      - DB_USER=bite-dev-user
+      - DB_PASSWORD=${DEV_DB_PASSWORD}
+      - JWT_SECRET_KEY=${DEV_JWT_SECRET_KEY}
+      - APP_BASE_URL=https://dev-api.bite-sized.xyz
+      - APP_ENV=development
+      - GITHUB_CLIENT_ID=${DEV_GITHUB_CLIENT_ID}
+      - GITHUB_CLIENT_SECRET=${DEV_GITHUB_CLIENT_SECRET}
+      - GOOGLE_CLIENT_ID=${DEV_GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${DEV_GOOGLE_CLIENT_SECRET}
+      - RECSYS_BASE_URL=http://recsys-api:8001
+      - RESEND_API_KEY=${RESEND_API_KEY}
+      - EMAIL_FROM=${EMAIL_FROM}
+      - QDRANT_URL=${QDRANT_URL}
+      - QDRANT_API_KEY=${QDRANT_API_KEY}
+    networks:
+      - bite-network
+    restart: unless-stopped
+
+  # === 개발계 웹 ===
+  bite-web-dev:
+    image: ghcr.io/bite-sized-knowledge/bite-web:latest
+    build: ../bite-web
+    container_name: bite-web-dev
+    ports:
+      - "3001:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=https://dev-api.bite-sized.xyz
+      - NEXT_PUBLIC_GITHUB_CLIENT_ID=${DEV_GITHUB_CLIENT_ID}
+      - NEXT_PUBLIC_GOOGLE_CLIENT_ID=${DEV_GOOGLE_CLIENT_ID}
+    networks:
+      - bite-network
+    depends_on:
+      - bite-api-dev
+    restart: unless-stopped
+
   cloudflared:
     image: cloudflare/cloudflared:latest
     container_name: bite-tunnel
@@ -134,6 +205,7 @@ services:
       - bite-network
     depends_on:
       - bite-api
+      - bite-web
     restart: unless-stopped
 
   backup:

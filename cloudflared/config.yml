@@ -2,6 +2,17 @@ tunnel: 554f1794-c5fb-4759-ba4c-6c88ccee59bb
 credentials-file: /etc/cloudflared/554f1794-c5fb-4759-ba4c-6c88ccee59bb.json
 
 ingress:
+  # 운영계
   - hostname: api.bite-sized.xyz
     service: http://bite-api:8080
+  - hostname: bite-sized.xyz
+    service: http://bite-web:3000
+  - hostname: www.bite-sized.xyz
+    service: http://bite-web:3000
+  # 개발계
+  - hostname: dev-api.bite-sized.xyz
+    service: http://bite-api-dev:8080
+  - hostname: dev.bite-sized.xyz
+    service: http://bite-web-dev:3000
+  # fallback
   - service: http_status:404
