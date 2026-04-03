@@ -1,0 +1,9 @@
+[mysqld]
+# Require TLS for all client connections (except localhost UNIX socket)
+require_secure_transport = ON
+
+# MySQL 8.0 auto-generates self-signed certs in /var/lib/mysql/
+# These directives use the auto-generated certs
+ssl_ca   = /var/lib/mysql/ca.pem
+ssl_cert = /var/lib/mysql/server-cert.pem
+ssl_key  = /var/lib/mysql/server-key.pem

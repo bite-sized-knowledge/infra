@@ -3,12 +3,13 @@ services:
     image: mysql:8.0
     container_name: bite-mysql
     ports:
-      - "3306:3306"
+      - "127.0.0.1:3306:3306"
     env_file:
       - .env
     volumes:
       - mysql_data:/var/lib/mysql
       - ./mysql/init:/docker-entrypoint-initdb.d
+      - ./mysql/conf.d:/etc/mysql/conf.d:ro
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p$$MYSQL_ROOT_PASSWORD || exit 1"]
       interval: 10s
@@ -22,8 +23,8 @@ services:
     image: qdrant/qdrant:latest
     container_name: bite-qdrant
     ports:
-      - "6333:6333"
-      - "6334:6334"
+      - "127.0.0.1:6333:6333"
+      - "127.0.0.1:6334:6334"
     volumes:
       - qdrant_data:/qdrant/storage
     networks:
@@ -34,12 +35,14 @@ services:
     build: ../recsys-serving
     container_name: bite-recsys
     ports:
-      - "8001:8001"
+      - "127.0.0.1:8001:8001"
     depends_on:
       - qdrant
       - mysql
     env_file:
       - .env
+    environment:
+      - RECSYS_API_KEY=${RECSYS_API_KEY}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
       interval: 15s
@@ -67,6 +70,7 @@ services:
       - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET}
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - RECSYS_API_KEY=${RECSYS_API_KEY}
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8080/actuator/health"]
       interval: 15s
