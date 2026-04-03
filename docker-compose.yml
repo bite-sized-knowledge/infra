@@ -147,7 +147,7 @@ services:
 
   # === 개발계 API ===
   bite-api-dev:
-    image: ghcr.io/bite-sized-knowledge/bite-api:latest
+    image: ghcr.io/bite-sized-knowledge/bite-api:dev
     build: ../bite-api
     container_name: bite-api-dev
     ports:
@@ -179,7 +179,7 @@ services:
 
   # === 개발계 웹 ===
   bite-web-dev:
-    image: ghcr.io/bite-sized-knowledge/bite-web:latest
+    image: ghcr.io/bite-sized-knowledge/bite-web:dev
     build: ../bite-web
     container_name: bite-web-dev
     ports:
@@ -194,6 +194,20 @@ services:
       - bite-api-dev
     restart: unless-stopped
 
+  deploy-webhook:
+    build: ./deploy-webhook
+    container_name: bite-deploy-webhook
+    environment:
+      - DEPLOY_TOKEN=${DEPLOY_TOKEN}
+      - COMPOSE_PATH=/infra
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - .:/infra:ro
+      - /Users/bite-server/.docker/config.json:/root/.docker/config.json:ro
+    networks:
+      - bite-network
+    restart: unless-stopped
+
   cloudflared:
     image: cloudflare/cloudflared:latest
     container_name: bite-tunnel
@@ -206,6 +220,7 @@ services:
     depends_on:
       - bite-api
       - bite-web
+      - deploy-webhook
     restart: unless-stopped
 
   backup:

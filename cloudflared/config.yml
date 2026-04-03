@@ -14,5 +14,8 @@ ingress:
     service: http://bite-api-dev:8080
   - hostname: dev.bite-sized.xyz
     service: http://bite-web-dev:3000
+  # deploy webhook
+  - hostname: deploy.bite-sized.xyz
+    service: http://deploy-webhook:9000
   # fallback
   - service: http_status:404

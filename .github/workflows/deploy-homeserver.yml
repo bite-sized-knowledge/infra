@@ -2,7 +2,7 @@ name: Deploy Infra to Home Server
 
 on:
   push:
-    branches: ["main"]
+    branches: ["prod"]
     paths:
       - 'docker-compose.yml'
       - 'verify.sh'
@@ -42,6 +42,6 @@ jobs:
           script: |
             set -e
             cd ~/projects/infra
-            git pull origin main
+            git pull origin prod
             docker compose pull
             docker compose up -d
