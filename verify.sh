@@ -2,8 +2,8 @@
 set -euo pipefail
 
 WORKDIR="$(cd "$(dirname "$0")" && pwd)"
-EXPECTED_DEFAULT_SERVICES=(mysql qdrant recsys-api bite-api harvester-go cloudflared backup)
-EXPECTED_BATCH_SERVICES=(mysql qdrant recsys-api bite-api harvester-go cloudflared backup dynamodb-local recommender)
+EXPECTED_DEFAULT_SERVICES=(mysql qdrant recsys-api bite-api bite-api-dev bite-web bite-web-dev harvester-go cloudflared backup deploy-webhook)
+EXPECTED_BATCH_SERVICES=(mysql qdrant recsys-api bite-api bite-api-dev bite-web bite-web-dev harvester-go cloudflared backup deploy-webhook recommender)
 
 if docker compose version >/dev/null 2>&1; then
   COMPOSE_CMD=(docker compose)

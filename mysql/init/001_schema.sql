@@ -210,7 +210,8 @@ CREATE TABLE IF NOT EXISTS user_events (
     INDEX idx_member_occurred (member_id, occurred_at),
     INDEX idx_article_occurred (article_id, occurred_at),
     INDEX idx_session (session_id, occurred_at),
-    INDEX idx_feed_request (feed_request_id, position)
+    INDEX idx_feed_request (feed_request_id, position),
+    INDEX idx_event_type_occurred (event_type, occurred_at)
 ) ENGINE=InnoDB;
 
 -- Derived engagement aggregates (batch-updated by recommender)
