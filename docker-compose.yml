@@ -192,6 +192,10 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - .:/infra:ro
       - /Users/bite-server/.docker/config.json:/root/.docker/config.json:ro
+      # Dedicated SSH deploy key used by the wake-and-rebuild strategy
+      # (harvest-post). Container SSHs into the Mac host as bite-server,
+      # which then runs wakeonlan + SSHs into the GPU. Read-only mount.
+      - /Users/bite-server/.ssh/deploy_ed25519:/root/.ssh/deploy_ed25519:ro
     networks:
       - bite-network
     restart: unless-stopped

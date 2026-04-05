@@ -20,21 +20,45 @@ var (
 
 const networkName = "infra_bite-network"
 
-// serviceInfo holds blue-green deployment metadata per service.
+// deployStrategy selects how a service is deployed. Most services run as
+// long-lived containers on this Mac and use zero-downtime blue-green. The
+// GPU batch jobs (harvest_post) run on a separate always-off machine and
+// require a wake-on-LAN trigger plus a remote rebuild — a fundamentally
+// different flow that doesn't fit blue-green.
+type deployStrategy string
+
+const (
+	strategyBlueGreen      deployStrategy = "blue-green"
+	strategyWakeAndRebuild deployStrategy = "wake-and-rebuild"
+)
+
+// serviceInfo holds deployment metadata per service.
+// - Blue-green services use ContainerName, HealthPort, HealthPath.
+// - wake-and-rebuild services use RemoteDeployScript (path relative to
+//   Mac host, executed via SSH into host.docker.internal).
 type serviceInfo struct {
+	Strategy      deployStrategy
 	ContainerName string
 	HealthPort    int    // internal port for health check (0 = no HTTP check)
 	HealthPath    string // e.g. "/actuator/health"
+	// RemoteDeployScript is the absolute path to a shell script on the Mac
+	// host that performs the deploy. The webhook SSHs in as bite-server and
+	// runs `bash <script>`. Only used by wake-and-rebuild strategy.
+	RemoteDeployScript string
 }
 
 var knownServices = map[string]serviceInfo{
-	"bite-api":     {ContainerName: "bite-api", HealthPort: 8080, HealthPath: "/actuator/health"},
-	"recsys-api":   {ContainerName: "bite-recsys", HealthPort: 8001, HealthPath: "/health"},
-	"bite-web":     {ContainerName: "bite-web", HealthPort: 3000, HealthPath: ""},
-	"bite-web-dev": {ContainerName: "bite-web-dev", HealthPort: 3000, HealthPath: ""},
-	"bite-api-dev": {ContainerName: "bite-api-dev", HealthPort: 8080, HealthPath: "/actuator/health"},
-	"harvester-go": {ContainerName: "bite-harvester", HealthPort: 0, HealthPath: ""},
-	"recommender":  {ContainerName: "bite-recommender", HealthPort: 0, HealthPath: ""},
+	"bite-api":     {Strategy: strategyBlueGreen, ContainerName: "bite-api", HealthPort: 8080, HealthPath: "/actuator/health"},
+	"recsys-api":   {Strategy: strategyBlueGreen, ContainerName: "bite-recsys", HealthPort: 8001, HealthPath: "/health"},
+	"bite-web":     {Strategy: strategyBlueGreen, ContainerName: "bite-web", HealthPort: 3000, HealthPath: ""},
+	"bite-web-dev": {Strategy: strategyBlueGreen, ContainerName: "bite-web-dev", HealthPort: 3000, HealthPath: ""},
+	"bite-api-dev": {Strategy: strategyBlueGreen, ContainerName: "bite-api-dev", HealthPort: 8080, HealthPath: "/actuator/health"},
+	"harvester-go": {Strategy: strategyBlueGreen, ContainerName: "bite-harvester", HealthPort: 0, HealthPath: ""},
+	"recommender":  {Strategy: strategyBlueGreen, ContainerName: "bite-recommender", HealthPort: 0, HealthPath: ""},
+	"harvest-post": {
+		Strategy:           strategyWakeAndRebuild,
+		RemoteDeployScript: "/Users/bite-server/projects/infra/scripts/deploy-gpu-harvest-post.sh",
+	},
 }
 
 // composeConfig is a minimal representation of `docker compose config --format json`.
@@ -100,7 +124,19 @@ func handleDeploy(w http.ResponseWriter, r *http.Request) {
 	mu.Lock()
 	defer mu.Unlock()
 
-	output, err := blueGreenDeploy(service, info)
+	var (
+		output string
+		err    error
+	)
+	switch info.Strategy {
+	case strategyBlueGreen, "": // legacy entries default to blue-green
+		output, err = blueGreenDeploy(service, info)
+	case strategyWakeAndRebuild:
+		output, err = wakeAndRebuild(service, info)
+	default:
+		err = fmt.Errorf("unknown strategy %q for service %s", info.Strategy, service)
+	}
+
 	if err != nil {
 		log.Printf("deploy failed service=%s err=%v", service, err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -110,6 +146,44 @@ func handleDeploy(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("deploy succeeded service=%s", service)
 	json.NewEncoder(w).Encode(apiResponse{OK: true, Message: "deployed", Output: output})
+}
+
+// wakeAndRebuild handles services that run on the GPU machine, which is
+// normally powered off. It SSHs from the webhook container to the Mac host
+// (via host.docker.internal, which Colima exposes as the VM gateway) and
+// runs the service-specific deploy script. The script is responsible for:
+//
+//   1. Sending wake-on-LAN to the GPU
+//   2. Waiting for the GPU's SSH to become reachable
+//   3. Running `git pull` + `docker compose build` on the GPU
+//
+// Putting the orchestration in a host-side script keeps the complex SSH
+// chain (webhook → Mac → GPU) and host-only tools (wakeonlan, Mac's
+// ~/.ssh/id_ed25519 that the GPU trusts) out of this container.
+//
+// The SSH key used from the webhook container → Mac is the
+// github-actions-deploy ed25519 key, mounted read-only at
+// /root/.ssh/deploy_ed25519 by docker-compose.yml.
+func wakeAndRebuild(service string, info serviceInfo) (string, error) {
+	if info.RemoteDeployScript == "" {
+		return "", fmt.Errorf("service %s has no RemoteDeployScript", service)
+	}
+
+	cmd := exec.Command(
+		"ssh",
+		"-i", "/root/.ssh/deploy_ed25519",
+		"-o", "StrictHostKeyChecking=accept-new",
+		"-o", "ConnectTimeout=10",
+		"-o", "BatchMode=yes",
+		"-o", "UserKnownHostsFile=/root/.ssh/known_hosts",
+		"bite-server@host.docker.internal",
+		"bash "+info.RemoteDeployScript,
+	)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return string(out), fmt.Errorf("remote deploy script failed: %w", err)
+	}
+	return string(out), nil
 }
 
 // blueGreenDeploy performs a zero-downtime deploy:
