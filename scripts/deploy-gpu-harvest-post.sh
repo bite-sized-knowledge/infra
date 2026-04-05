@@ -71,16 +71,18 @@ if ! diff -q /etc/systemd/system/harvest-post.service ~/harvest_post/harvest-pos
     sudo -n cp ~/harvest_post/harvest-post.service /etc/systemd/system/harvest-post.service
     sudo -n systemctl daemon-reload
 fi
-echo "[gpu] systemctl start harvest-post.service (runs run.sh with fresh code)"
+echo "[gpu] systemctl restart harvest-post.service (runs run.sh with fresh code)"
 sudo -n systemctl reset-failed harvest-post.service 2>/dev/null || true
-# --no-block: dispatch the start job and return immediately. run.sh takes
-# 5-10 minutes (docker compose up + vLLM cold start + queue drain +
-# shutdown) which is far beyond the Cloudflare Tunnel ~100s timeout
-# between GitHub Actions and the webhook. We return quickly from the
-# deploy script so CI gets its "ok:true" response promptly, while
-# systemd carries run.sh to completion in the background on the GPU.
-sudo -n systemctl start --no-block harvest-post.service
-echo "[gpu] systemd start dispatched (non-blocking)"
+# Use restart (not start) to handle two race scenarios at once:
+#  1. GPU just booted and systemd's WantedBy=multi-user.target auto-started
+#     run.sh with STALE code — restart kills that and relaunches with fresh.
+#  2. Service is in failed state — restart clears + relaunches.
+# --no-block: dispatch the job and return immediately. run.sh takes 5-10
+# minutes (docker compose up + vLLM cold start + queue drain + shutdown)
+# which exceeds the Cloudflare Tunnel ~100s timeout between GitHub Actions
+# and this webhook.
+sudo -n systemctl restart --no-block harvest-post.service
+echo "[gpu] systemd restart dispatched (non-blocking)"
 REMOTE
 
 log "deploy complete"
