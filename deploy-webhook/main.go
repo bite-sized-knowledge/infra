@@ -13,10 +13,15 @@ import (
 )
 
 var (
-	token       string
-	composePath string
-	mu          sync.Mutex
+	token        string
+	composePath  string
+	serviceLocks sync.Map
 )
+
+func getServiceLock(service string) *sync.Mutex {
+	val, _ := serviceLocks.LoadOrStore(service, &sync.Mutex{})
+	return val.(*sync.Mutex)
+}
 
 const networkName = "infra_bite-network"
 
@@ -121,8 +126,9 @@ func handleDeploy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	mu.Lock()
-	defer mu.Unlock()
+	svcMu := getServiceLock(service)
+	svcMu.Lock()
+	defer svcMu.Unlock()
 
 	var (
 		output string

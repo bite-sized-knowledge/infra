@@ -54,7 +54,7 @@ sleep 3
 # start had already failed (or used stale code). `systemctl restart`
 # resets the failed state and re-execs run.sh with the up-to-date files.
 log "git pull + docker compose build on GPU"
-ssh $SSH_OPTS "$GPU_USER@$GPU_HOST" bash <<'REMOTE'
+timeout 180 ssh $SSH_OPTS "$GPU_USER@$GPU_HOST" bash <<'REMOTE'
 set -euo pipefail
 cd ~/harvest_post
 echo "[gpu] current HEAD: $(git rev-parse --short HEAD 2>/dev/null || echo none)"
