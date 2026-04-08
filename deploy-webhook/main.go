@@ -282,7 +282,7 @@ func blueGreenDeploy(service string, info serviceInfo) (string, error) {
 // resolveServiceConfig uses `docker compose config` to get the fully-resolved
 // image name and environment variables for a service.
 func resolveServiceConfig(service string) (image string, env map[string]string, hasEnvFile bool, err error) {
-	out, err := run(composePath, "docker", "compose", "config", "--format", "json")
+	out, err := run(composePath, "docker", "compose", "--profile", "batch", "config", "--format", "json")
 	if err != nil {
 		return "", nil, false, fmt.Errorf("compose config: %w (%s)", err, out)
 	}

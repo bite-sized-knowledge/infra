@@ -24,6 +24,11 @@ SSH_OPTS="-o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 -o BatchMode=y
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1"; }
 
+# macOS lacks GNU timeout; prefer gtimeout from Homebrew coreutils, else skip.
+TIMEOUT=""
+command -v timeout  >/dev/null 2>&1 && TIMEOUT="timeout 180"
+command -v gtimeout >/dev/null 2>&1 && TIMEOUT="gtimeout 180"
+
 # --- 1. wake ---
 log "sending WoL to $GPU_MAC"
 /opt/homebrew/bin/wakeonlan "$GPU_MAC" > /dev/null
@@ -54,7 +59,7 @@ sleep 3
 # start had already failed (or used stale code). `systemctl restart`
 # resets the failed state and re-execs run.sh with the up-to-date files.
 log "git pull + docker compose build on GPU"
-timeout 180 ssh $SSH_OPTS "$GPU_USER@$GPU_HOST" bash <<'REMOTE'
+$TIMEOUT ssh $SSH_OPTS "$GPU_USER@$GPU_HOST" bash <<'REMOTE'
 set -euo pipefail
 cd ~/harvest_post
 echo "[gpu] current HEAD: $(git rev-parse --short HEAD 2>/dev/null || echo none)"
