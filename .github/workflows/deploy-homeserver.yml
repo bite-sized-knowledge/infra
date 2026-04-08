@@ -8,7 +8,9 @@ on:
       - 'verify.sh'
       - 'backup/**'
       - 'cloudflared/**'
+      - 'deploy-webhook/**'
       - 'mysql/**'
+      - 'scripts/**'
       - '.github/workflows/**'
   workflow_dispatch:
 
