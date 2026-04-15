@@ -3,7 +3,7 @@ services:
     image: mysql:8.0
     container_name: bite-mysql
     ports:
-      - "127.0.0.1:3306:3306"
+      - "0.0.0.0:3306:3306"
     env_file:
       - .env
     volumes:
@@ -24,8 +24,8 @@ services:
     image: qdrant/qdrant:latest
     container_name: bite-qdrant
     ports:
-      - "127.0.0.1:6333:6333"
-      - "127.0.0.1:6334:6334"
+      - "0.0.0.0:6333:6333"
+      - "0.0.0.0:6334:6334"
     volumes:
       - qdrant_data:/qdrant/storage
     restart: unless-stopped
