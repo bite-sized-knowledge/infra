@@ -241,6 +241,42 @@ services:
       - deploy-webhook
     restart: unless-stopped
 
+  # === 모니터링 ===
+  bite-monitor:
+    image: ghcr.io/bite-sized-knowledge/bite-monitor:latest
+    build: ../bite-monitor
+    container_name: bite-monitor
+    ports:
+      - "127.0.0.1:3002:3000"
+    env_file:
+      - .env
+    environment:
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_NAME=bite
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - QDRANT_URL=http://qdrant:6333
+      - QDRANT_API_KEY=${QDRANT_API_KEY}
+      - DEPLOY_TOKEN=${DEPLOY_TOKEN}
+      - DEPLOY_WEBHOOK_URL=http://deploy-webhook:9000
+      - GITHUB_TOKEN=${GITHUB_PAT}
+      - GPU_HOST=192.168.219.101
+      - GPU_USER=siroo
+      - GPU_MAC=70:85:c2:a8:ad:b2
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./backup:/backup:ro
+      - /tmp/wake-and-harvest.log:/logs/wake-and-harvest.log:ro
+      - /Users/bite-server/.ssh/deploy_ed25519:/root/.ssh/deploy_ed25519:ro
+      - ./mysql/ca.pem:/etc/ssl/mysql-ca.pem:ro
+    networks:
+      - bite-network
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: unless-stopped
+
   backup:
     image: mysql:8.0
     container_name: bite-backup

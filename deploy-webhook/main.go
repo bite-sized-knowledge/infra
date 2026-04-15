@@ -64,6 +64,7 @@ var knownServices = map[string]serviceInfo{
 		Strategy:           strategyWakeAndRebuild,
 		RemoteDeployScript: "/Users/bite-server/projects/infra/scripts/deploy-gpu-harvest-post.sh",
 	},
+	"bite-monitor": {Strategy: strategyBlueGreen, ContainerName: "bite-monitor", HealthPort: 3000, HealthPath: ""},
 }
 
 // composeConfig is a minimal representation of `docker compose config --format json`.
