@@ -4,6 +4,13 @@
 
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 
+# Load MYSQL_PASSWORD from .env
+SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+if [ -z "$MYSQL_PASSWORD" ] && [ -f "$SCRIPT_DIR/.env" ]; then
+    MYSQL_PASSWORD=$(grep '^MYSQL_PASSWORD=' "$SCRIPT_DIR/.env" | cut -d'=' -f2- | tr -d '"')
+    export MYSQL_PASSWORD
+fi
+
 LOG="/tmp/wake-and-harvest.log"
 GPU_MAC="70:85:c2:a8:ad:b2"
 
