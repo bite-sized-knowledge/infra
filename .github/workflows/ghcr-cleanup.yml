@@ -1,0 +1,87 @@
+name: GHCR Image Cleanup
+
+on:
+  schedule:
+    - cron: "0 20 * * *" # Daily 05:00 KST (UTC+9)
+  workflow_dispatch:
+
+env:
+  ORG: bite-sized-knowledge
+  KEEP_TAGS: "latest|dev"
+  RETENTION_DAYS: 7
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+
+    strategy:
+      matrix:
+        package:
+          - bite-api
+          - bite-web
+          - harvester-go
+          - recsys-serving
+          - recommender
+
+    steps:
+      - name: Delete untagged versions
+        uses: actions/delete-package-versions@v5
+        with:
+          package-name: ${{ matrix.package }}
+          package-type: container
+          owner: ${{ env.ORG }}
+          min-versions-to-keep: 0
+          delete-only-untagged-versions: true
+
+      - name: Delete old tagged versions
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pkg = '${{ matrix.package }}';
+            const org = '${{ env.ORG }}';
+            const keepTags = /^(${{ env.KEEP_TAGS }})$/;
+            const cutoff = new Date();
+            cutoff.setDate(cutoff.getDate() - ${{ env.RETENTION_DAYS }});
+
+            let page = 1;
+            let deleted = 0;
+
+            while (true) {
+              const versions = await github.rest.packages.getAllPackageVersionsForPackageOwnedByOrg({
+                package_type: 'container',
+                package_name: pkg,
+                org: org,
+                per_page: 100,
+                page: page,
+              });
+
+              if (versions.data.length === 0) break;
+
+              for (const v of versions.data) {
+                const tags = v.metadata?.container?.tags || [];
+                const createdAt = new Date(v.created_at);
+
+                // Skip if has a keep tag or is newer than cutoff
+                if (tags.some(t => keepTags.test(t))) continue;
+                if (createdAt > cutoff) continue;
+
+                try {
+                  await github.rest.packages.deletePackageVersionForOrg({
+                    package_type: 'container',
+                    package_name: pkg,
+                    org: org,
+                    package_version_id: v.id,
+                  });
+                  deleted++;
+                  core.info(`Deleted ${pkg} v${v.id} (tags: ${tags.join(',') || 'none'}, created: ${v.created_at})`);
+                } catch (e) {
+                  core.warning(`Failed to delete ${pkg} v${v.id}: ${e.message}`);
+                }
+              }
+
+              page++;
+            }
+
+            core.info(`${pkg}: deleted ${deleted} old versions`);
