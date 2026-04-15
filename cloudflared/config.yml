@@ -14,14 +14,6 @@ ingress:
     service: http://bite-api-dev:8080
   - hostname: dev.bite-sized.xyz
     service: http://host.docker.internal:3100
-  # database
-  - hostname: db.bite-sized.xyz
-    service: tcp://bite-mysql:3306
-  # qdrant dashboard
-  - hostname: qdrant.bite-sized.xyz
-    service: http://bite-qdrant:6333
-  - hostname: qdrant-dev.bite-sized.xyz
-    service: http://bite-qdrant-dev:6333
   # deploy webhook
   - hostname: deploy.bite-sized.xyz
     service: http://deploy-webhook:9000

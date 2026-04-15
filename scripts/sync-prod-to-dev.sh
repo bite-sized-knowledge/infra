@@ -14,7 +14,7 @@ mkdir -p "$(dirname "$LOG")"
 
     DB_HOST=127.0.0.1 \
     DB_USER=bite-dev \
-    DB_PASSWORD=qkdlxm! \
+    DB_PASSWORD="${DB_PASSWORD:?DB_PASSWORD must be set}" \
     QDRANT_PROD_PORT=6333 \
     QDRANT_DEV_PORT=6335 \
     python3 scripts/sync_bite_to_dev.py

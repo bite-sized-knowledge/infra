@@ -26,6 +26,8 @@ services:
     ports:
       - "0.0.0.0:6333:6333"
       - "0.0.0.0:6334:6334"
+    environment:
+      - QDRANT__SERVICE__API_KEY=${QDRANT_API_KEY}
     volumes:
       - qdrant_data:/qdrant/storage
     restart: unless-stopped
@@ -38,6 +40,8 @@ services:
     ports:
       - "127.0.0.1:6335:6333"
       - "127.0.0.1:6336:6334"
+    environment:
+      - QDRANT__SERVICE__API_KEY=${QDRANT_API_KEY}
     volumes:
       - qdrant_dev_data:/qdrant/storage
     restart: unless-stopped
@@ -55,6 +59,8 @@ services:
       - mysql
     env_file:
       - .env
+    volumes:
+      - ./mysql/ca.pem:/etc/ssl/mysql-ca.pem:ro
     environment:
       - RECSYS_API_KEY=${RECSYS_API_KEY}
     healthcheck:
@@ -80,6 +86,8 @@ services:
         condition: service_started
     env_file:
       - .env
+    volumes:
+      - ./mysql/ca.pem:/etc/ssl/mysql-ca.pem:ro
     environment:
       - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID}
       - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET}
@@ -102,6 +110,8 @@ services:
     container_name: bite-harvester
     env_file:
       - .env
+    volumes:
+      - ./mysql/ca.pem:/etc/ssl/mysql-ca.pem:ro
     depends_on:
       mysql:
         condition: service_healthy
@@ -123,7 +133,7 @@ services:
       RDS_PASSWORD: ${RDS_PASSWORD:-}
       RDS_PORT: ${RDS_PORT:-3306}
       QDRANT_ENDPOINT: ${QDRANT_ENDPOINT:-http://qdrant:6333}
-      QDRANT_API: ${QDRANT_API:-}
+      QDRANT_API: ${QDRANT_API_KEY}
     depends_on:
       mysql:
         condition: service_healthy
@@ -176,7 +186,7 @@ services:
       - RESEND_API_KEY=${RESEND_API_KEY}
       - EMAIL_FROM=${EMAIL_FROM}
       - QDRANT_URL=http://qdrant-dev:6333
-      - QDRANT_API_KEY=
+      - QDRANT_API_KEY=${QDRANT_API_KEY}
     networks:
       - bite-network
     restart: unless-stopped
