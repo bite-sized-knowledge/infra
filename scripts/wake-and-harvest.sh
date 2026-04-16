@@ -14,9 +14,9 @@ fi
 
 LOG="/tmp/wake-and-harvest.log"
 GPU_MAC="70:85:c2:a8:ad:b2"
-GPU_HOST="192.168.219.101"
+GPU_HOST="124.59.179.22"
+GPU_PORT=3475
 GPU_USER="siroo"
-SSH_KEY="$HOME/.ssh/deploy_ed25519"
 MAX_WAIT=3600  # 최대 60분 대기
 
 log() {
@@ -36,7 +36,7 @@ get_rejected_count() {
 }
 
 gpu_reachable() {
-    ssh -o ConnectTimeout=3 -o BatchMode=yes -o StrictHostKeyChecking=no -i "$SSH_KEY" "$GPU_USER@$GPU_HOST" echo ok >/dev/null 2>&1
+    ssh -o ConnectTimeout=3 -o BatchMode=yes -o StrictHostKeyChecking=no -p "$GPU_PORT" "$GPU_USER@$GPU_HOST" echo ok >/dev/null 2>&1
 }
 
 # --- 1. Queue 확인 ---

@@ -18,9 +18,10 @@
 set -euo pipefail
 
 GPU_MAC="70:85:c2:a8:ad:b2"
-GPU_HOST="192.168.219.101"
+GPU_HOST="124.59.179.22"
+GPU_PORT=3475
 GPU_USER="siroo"
-SSH_OPTS="-o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 -o BatchMode=yes"
+SSH_OPTS="-o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 -o BatchMode=yes -p $GPU_PORT"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1"; }
 
@@ -34,10 +35,10 @@ log "sending WoL to $GPU_MAC"
 /opt/homebrew/bin/wakeonlan "$GPU_MAC" > /dev/null
 
 # --- 2. wait for SSH ---
-log "waiting for $GPU_HOST:22"
+log "waiting for $GPU_HOST:$GPU_PORT"
 READY=0
 for i in $(seq 1 60); do
-    if nc -z -w 2 "$GPU_HOST" 22 2>/dev/null; then
+    if nc -z -w 2 "$GPU_HOST" "$GPU_PORT" 2>/dev/null; then
         log "GPU SSH ready after ${i} attempts"
         READY=1
         break
