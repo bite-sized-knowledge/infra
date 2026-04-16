@@ -261,7 +261,8 @@ services:
       - DEPLOY_TOKEN=${DEPLOY_TOKEN}
       - DEPLOY_WEBHOOK_URL=http://deploy-webhook:9000
       - GITHUB_TOKEN=${GITHUB_PAT}
-      - GPU_HOST=192.168.219.101
+      - GPU_HOST=124.59.179.22
+      - GPU_PORT=3475
       - GPU_USER=siroo
       - GPU_MAC=70:85:c2:a8:ad:b2
     volumes:
