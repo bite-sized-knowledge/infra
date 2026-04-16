@@ -12,7 +12,8 @@ if [ -z "$MYSQL_PASSWORD" ] && [ -f "$SCRIPT_DIR/.env" ]; then
     export MYSQL_PASSWORD
 fi
 
-LOG="/tmp/wake-and-harvest.log"
+LOG="$SCRIPT_DIR/logs/wake-and-harvest.log"
+mkdir -p "$(dirname "$LOG")"
 GPU_MAC="70:85:c2:a8:ad:b2"
 GPU_HOST="124.59.179.22"
 GPU_PORT=3475

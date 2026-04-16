@@ -265,10 +265,13 @@ services:
       - GPU_PORT=3475
       - GPU_USER=siroo
       - GPU_MAC=70:85:c2:a8:ad:b2
+      - WOL_LOG=/logs/wake-and-harvest.log
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./backup:/backup:ro
-      - /tmp/wake-and-harvest.log:/logs/wake-and-harvest.log:ro
+      # Colima doesn't share /tmp with containers; wake-and-harvest.sh
+      # writes to infra/logs/ which is within the shared $HOME path.
+      - ./logs:/logs:ro
       - /Users/bite-server/.ssh/deploy_ed25519:/root/.ssh/deploy_ed25519:ro
       - ./mysql/ca.pem:/etc/ssl/mysql-ca.pem:ro
     networks:
