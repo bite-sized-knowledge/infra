@@ -1,9 +1,27 @@
 #!/bin/bash
-# Mac cron에서 3시간마다 실행
+# Mac cron에서 주기적으로 실행
 # article_queue가 비어있으면 GPU를 깨우지 않음
 # GPU 깨운 후 처리 완료까지 대기하고 결과를 로그에 기록
 
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+
+# Prevent concurrent runs (mkdir is atomic on all platforms)
+LOCKDIR="/tmp/wake-and-harvest.lock"
+if ! mkdir "$LOCKDIR" 2>/dev/null; then
+    # Stale lock guard: if the lock is older than MAX_WAIT+5min, remove and retry
+    if [ -d "$LOCKDIR" ]; then
+        LOCK_AGE=$(( $(date +%s) - $(stat -f %m "$LOCKDIR") ))
+        if [ "$LOCK_AGE" -gt 3900 ]; then
+            rmdir "$LOCKDIR" 2>/dev/null
+            mkdir "$LOCKDIR" 2>/dev/null || exit 0
+        else
+            exit 0
+        fi
+    else
+        exit 0
+    fi
+fi
+trap 'rmdir "$LOCKDIR" 2>/dev/null' EXIT
 
 # Load MYSQL_PASSWORD from .env
 SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -19,6 +37,7 @@ GPU_HOST="124.59.179.22"
 GPU_PORT=3475
 GPU_USER="siroo"
 MAX_WAIT=3600  # 최대 60분 대기
+FAIL_COUNTER="$SCRIPT_DIR/logs/.harvest-fail-count"
 
 log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$LOG"
@@ -63,9 +82,11 @@ ARTICLES_BEFORE=$(get_article_count)
 REJECTED_BEFORE=$(get_rejected_count)
 log "WAKE - queue=$QUEUE_COUNT, articles=$ARTICLES_BEFORE, rejected=$REJECTED_BEFORE"
 
-# --- 3. GPU 깨우기 (이미 켜져있으면 스킵) ---
+# --- 3. GPU 깨우기 (이미 켜져있으면 서비스 재시작) ---
+GPU_SSH="ssh -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=no -p $GPU_PORT $GPU_USER@$GPU_HOST"
 if gpu_reachable; then
-    log "GPU already online, skipping WoL"
+    log "GPU already online — restarting harvest-post.service"
+    $GPU_SSH "sudo -n systemctl restart harvest-post.service" >> "$LOG" 2>&1 || log "WARN: service restart failed"
 else
     /opt/homebrew/bin/wakeonlan "$GPU_MAC" >> "$LOG" 2>&1
 
@@ -87,7 +108,7 @@ else
 fi
 
 # --- 4. 처리 완료 대기 ---
-# harvest-post는 systemd로 자동 시작, queue가 빌 때까지 대기
+# harvest-post는 systemd로 자동 시작 (WoL 부팅) 또는 위에서 재시작됨
 ELAPSED=0
 while [ $ELAPSED -lt $MAX_WAIT ]; do
     sleep 60
@@ -105,6 +126,8 @@ while [ $ELAPSED -lt $MAX_WAIT ]; do
         PUBLISHED=$((ARTICLES_AFTER - ARTICLES_BEFORE))
         REJECTED=$((REJECTED_AFTER - REJECTED_BEFORE))
         log "DONE - queue cleared in ${ELAPSED}s: +${PUBLISHED} published, +${REJECTED} rejected"
+        # Reset consecutive failure counter on success
+        echo 0 > "$FAIL_COUNTER"
         exit 0
     fi
 
@@ -122,3 +145,18 @@ REJECTED_AFTER=$(get_rejected_count)
 PUBLISHED=$((ARTICLES_AFTER - ARTICLES_BEFORE))
 REJECTED=$((REJECTED_AFTER - REJECTED_BEFORE))
 log "TIMEOUT - ${MAX_WAIT}s, queue=${CURRENT_QUEUE} remaining, +${PUBLISHED} published, +${REJECTED} rejected"
+
+# --- 5. Force shutdown GPU on timeout ---
+# run.sh has its own watchdog, but if it crashed or hung without cleanup,
+# the GPU may still be on. Force it off so we don't burn electricity.
+if gpu_reachable; then
+    log "FORCE-SHUTDOWN: GPU still on after timeout — sending shutdown command"
+    $GPU_SSH "sudo -n /usr/sbin/shutdown -h +1" >> "$LOG" 2>&1 || log "WARN: force-shutdown failed"
+fi
+
+# --- 6. Consecutive failure counter ---
+FAILS=$(( $(cat "$FAIL_COUNTER" 2>/dev/null || echo 0) + 1 ))
+echo "$FAILS" > "$FAIL_COUNTER"
+if [ "$FAILS" -ge 3 ]; then
+    log "ALERT: $FAILS consecutive harvest failures — manual investigation needed"
+fi
