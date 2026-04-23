@@ -59,7 +59,6 @@ jobs:
           lines = env_path.read_text().splitlines()
           overrides = {
               'PROXY_URL': '',
-              'DISCORD_WEBHOOK_URL': '',
               'OPENAI_API_KEY': '',
               'RESEND_API_KEY': '',
               'APP_BASE_URL': 'http://localhost:8080',
