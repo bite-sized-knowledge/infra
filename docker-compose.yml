@@ -48,6 +48,30 @@ services:
     networks:
       - bite-network
 
+  redis:
+    image: redis:7-alpine
+    container_name: bite-redis
+    ports:
+      - "127.0.0.1:6379:6379"
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --maxmemory
+      - "256mb"
+      - --maxmemory-policy
+      - allkeys-lru
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - bite-network
+
   recsys-api:
     image: ghcr.io/bite-sized-knowledge/recsys-serving:latest
     build: ../recsys-serving
@@ -57,12 +81,15 @@ services:
     depends_on:
       - qdrant
       - mysql
+      - redis
     env_file:
       - .env
     volumes:
       - ./mysql/ca.pem:/etc/ssl/mysql-ca.pem:ro
+      - ../recsys-serving/models:/app/models:ro
     environment:
       - RECSYS_API_KEY=${RECSYS_API_KEY}
+      - REDIS_URL=redis://redis:6379/0
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
       interval: 15s
@@ -94,6 +121,7 @@ services:
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
       - RECSYS_API_KEY=${RECSYS_API_KEY}
+      - RECSYS_SEARCH_ENABLED=true
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8080/actuator/health"]
       interval: 15s
@@ -301,6 +329,7 @@ volumes:
   mysql_data:
   qdrant_data:
   qdrant_dev_data:
+  redis_data:
 
 networks:
   bite-network:
