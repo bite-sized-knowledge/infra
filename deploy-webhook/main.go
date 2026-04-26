@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -69,13 +70,48 @@ var knownServices = map[string]serviceInfo{
 
 // composeConfig is a minimal representation of `docker compose config --format json`.
 type composeConfig struct {
-	Services map[string]composeService `json:"services"`
+	Services map[string]composeService     `json:"services"`
+	Volumes  map[string]composeNamedVolume `json:"volumes"`
+}
+
+type composeNamedVolume struct {
+	Name string `json:"name"`
 }
 
 type composeService struct {
-	Image       string          `json:"image"`
-	Environment json.RawMessage `json:"environment"`
-	EnvFile     json.RawMessage `json:"env_file"`
+	Image       string              `json:"image"`
+	Environment json.RawMessage     `json:"environment"`
+	EnvFile     json.RawMessage     `json:"env_file"`
+	Volumes     []composeVolume     `json:"volumes"`
+	Healthcheck *composeHealthcheck `json:"healthcheck"`
+	Restart     string              `json:"restart"`
+}
+
+type composeVolume struct {
+	Type     string `json:"type"`
+	Source   string `json:"source"`
+	Target   string `json:"target"`
+	ReadOnly bool   `json:"read_only"`
+}
+
+type composeHealthcheck struct {
+	Test        []string `json:"test"`
+	Interval    string   `json:"interval"`
+	Timeout     string   `json:"timeout"`
+	Retries     int      `json:"retries"`
+	StartPeriod string   `json:"start_period"`
+	Disable     bool     `json:"disable"`
+}
+
+// resolvedConfig is the post-processed view we hand to the deploy step.
+// Named volumes are already mapped to their project-prefixed Docker names.
+type resolvedConfig struct {
+	Image       string
+	Env         map[string]string
+	HasEnvFile  bool
+	Volumes     []composeVolume
+	Healthcheck *composeHealthcheck
+	Restart     string
 }
 
 type apiResponse struct {
@@ -220,31 +256,49 @@ func blueGreenDeploy(service string, info serviceInfo) (string, error) {
 
 	// --- 2. Resolve image and environment from compose ---
 	logf("[2/6] resolving compose config")
-	image, envVars, hasEnvFile, err := resolveServiceConfig(service)
+	cfg, err := resolveServiceConfig(service)
 	if err != nil {
 		return logs.String(), fmt.Errorf("config resolution failed: %w", err)
 	}
-	logf("  image=%s envVars=%d envFile=%v", image, len(envVars), hasEnvFile)
+	logf("  image=%s envVars=%d envFile=%v volumes=%d healthcheck=%v",
+		cfg.Image, len(cfg.Env), cfg.HasEnvFile, len(cfg.Volumes), cfg.Healthcheck != nil)
 
 	// --- 3. Cleanup stale green container (if any) ---
 	run("", "docker", "rm", "-f", greenName)
 
 	// --- 4. Start green container ---
+	//
+	// Host port bindings from compose are intentionally NOT applied here:
+	// blue-green requires green to coexist with blue, so the same host port
+	// cannot be claimed twice. All inter-service traffic (cloudflared, the
+	// monitor, etc.) goes through bite-network DNS, so dropping host ports
+	// is fine in production. For direct host-side debug access, run
+	// `docker compose up -d --force-recreate <service>` manually.
 	logf("[3/6] starting green container: %s", greenName)
+	restart := cfg.Restart
+	if restart == "" {
+		restart = "unless-stopped"
+	}
 	args := []string{
 		"run", "-d",
 		"--name", greenName,
 		"--network", networkName,
 		"--network-alias", service, // shares DNS name with the blue container
-		"--restart", "unless-stopped",
+		"--restart", restart,
 	}
-	if hasEnvFile {
+	if cfg.HasEnvFile {
 		args = append(args, "--env-file", composePath+"/.env")
 	}
-	for k, v := range envVars {
+	for k, v := range cfg.Env {
 		args = append(args, "-e", k+"="+v)
 	}
-	args = append(args, image)
+	for _, v := range cfg.Volumes {
+		if spec := buildMountSpec(v); spec != "" {
+			args = append(args, "--mount", spec)
+		}
+	}
+	args = append(args, buildHealthArgs(cfg.Healthcheck)...)
+	args = append(args, cfg.Image)
 
 	out, err = run("", "docker", args...)
 	logs.WriteString(out)
@@ -281,27 +335,42 @@ func blueGreenDeploy(service string, info serviceInfo) (string, error) {
 }
 
 // resolveServiceConfig uses `docker compose config` to get the fully-resolved
-// image name and environment variables for a service.
-func resolveServiceConfig(service string) (image string, env map[string]string, hasEnvFile bool, err error) {
+// view of a service. Named volume references are mapped to their
+// project-prefixed Docker names so the resulting `docker run` finds them.
+func resolveServiceConfig(service string) (resolvedConfig, error) {
 	out, err := run(composePath, "docker", "compose", "--profile", "batch", "config", "--format", "json")
 	if err != nil {
-		return "", nil, false, fmt.Errorf("compose config: %w (%s)", err, out)
+		return resolvedConfig{}, fmt.Errorf("compose config: %w (%s)", err, out)
 	}
 
 	var cfg composeConfig
 	if err := json.Unmarshal([]byte(out), &cfg); err != nil {
-		return "", nil, false, fmt.Errorf("parse config: %w", err)
+		return resolvedConfig{}, fmt.Errorf("parse config: %w", err)
 	}
 
 	svc, ok := cfg.Services[service]
 	if !ok {
-		return "", nil, false, fmt.Errorf("service %q not in compose config", service)
+		return resolvedConfig{}, fmt.Errorf("service %q not in compose config", service)
 	}
 
-	env = parseEnv(svc.Environment)
-	hasEnvFile = svc.EnvFile != nil && string(svc.EnvFile) != "null"
+	volumes := make([]composeVolume, 0, len(svc.Volumes))
+	for _, v := range svc.Volumes {
+		if v.Type == "volume" {
+			if named, ok := cfg.Volumes[v.Source]; ok && named.Name != "" {
+				v.Source = named.Name
+			}
+		}
+		volumes = append(volumes, v)
+	}
 
-	return svc.Image, env, hasEnvFile, nil
+	return resolvedConfig{
+		Image:       svc.Image,
+		Env:         parseEnv(svc.Environment),
+		HasEnvFile:  svc.EnvFile != nil && string(svc.EnvFile) != "null",
+		Volumes:     volumes,
+		Healthcheck: svc.Healthcheck,
+		Restart:     svc.Restart,
+	}, nil
 }
 
 // parseEnv handles both map {"K":"V"} and list ["K=V"] formats.
@@ -379,4 +448,101 @@ func run(dir string, name string, args ...string) (string, error) {
 func runQuiet(name string, args ...string) string {
 	out, _ := exec.Command(name, args...).CombinedOutput()
 	return string(out)
+}
+
+// buildMountSpec turns a compose volume entry into a `docker run --mount`
+// string. Returns "" for entries we can't represent (missing fields,
+// unsupported type) so the caller can skip them.
+func buildMountSpec(v composeVolume) string {
+	if v.Target == "" {
+		return ""
+	}
+	var parts []string
+	switch v.Type {
+	case "bind", "volume":
+		if v.Source == "" {
+			return ""
+		}
+		parts = []string{"type=" + v.Type, "source=" + v.Source, "destination=" + v.Target}
+	case "tmpfs":
+		parts = []string{"type=tmpfs", "destination=" + v.Target}
+	default:
+		return ""
+	}
+	if v.ReadOnly {
+		parts = append(parts, "readonly")
+	}
+	return strings.Join(parts, ",")
+}
+
+// buildHealthArgs translates a compose healthcheck block into the
+// `docker run --health-*` flags. Returns nil if the healthcheck is absent,
+// disabled, or doesn't produce a usable command.
+func buildHealthArgs(hc *composeHealthcheck) []string {
+	if hc == nil || hc.Disable {
+		return nil
+	}
+	cmd := buildHealthCmd(hc.Test)
+	if cmd == "" {
+		return nil
+	}
+	args := []string{"--health-cmd", cmd}
+	if hc.Interval != "" {
+		args = append(args, "--health-interval", hc.Interval)
+	}
+	if hc.Timeout != "" {
+		args = append(args, "--health-timeout", hc.Timeout)
+	}
+	if hc.Retries > 0 {
+		args = append(args, "--health-retries", strconv.Itoa(hc.Retries))
+	}
+	if hc.StartPeriod != "" {
+		args = append(args, "--health-start-period", hc.StartPeriod)
+	}
+	return args
+}
+
+// buildHealthCmd flattens compose's healthcheck.test list into a single
+// shell string, matching `docker run --health-cmd` semantics (the value is
+// always run via `/bin/sh -c`). Returns "" for NONE / empty / unrecognized.
+func buildHealthCmd(test []string) string {
+	if len(test) == 0 {
+		return ""
+	}
+	switch test[0] {
+	case "NONE":
+		return ""
+	case "CMD-SHELL":
+		if len(test) >= 2 {
+			return test[1]
+		}
+		return ""
+	case "CMD":
+		return joinShellQuoted(test[1:])
+	default:
+		return joinShellQuoted(test)
+	}
+}
+
+func joinShellQuoted(args []string) string {
+	quoted := make([]string, len(args))
+	for i, s := range args {
+		quoted[i] = shellQuote(s)
+	}
+	return strings.Join(quoted, " ")
+}
+
+// shellQuote wraps s in single quotes if it contains anything outside a
+// safe POSIX-shell-portable set, escaping embedded single quotes.
+func shellQuote(s string) string {
+	if s == "" {
+		return "''"
+	}
+	for _, r := range s {
+		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') ||
+			r == '_' || r == '-' || r == '/' || r == '.' || r == ':' || r == '=' || r == '+' || r == '@' || r == ',') {
+			return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+		}
+	}
+	return s
 }
