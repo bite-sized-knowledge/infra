@@ -97,7 +97,8 @@ CREATE TABLE IF NOT EXISTS article (
     INDEX idx_blog_sort_key (blog_id, sort_key DESC),
     INDEX idx_sort_key (sort_key DESC),
     INDEX idx_blog_publish_sort_key (blog_id, publish_sort_key DESC),
-    INDEX idx_publish_sort_key (publish_sort_key DESC)
+    INDEX idx_publish_sort_key (publish_sort_key DESC),
+    FULLTEXT INDEX ft_article_search (title, description, keywords) WITH PARSER ngram
 );
 
 CREATE TABLE IF NOT EXISTS article_like (
