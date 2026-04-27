@@ -17,6 +17,8 @@ ingress:
   # 모니터링
   - hostname: monitor.bite-sized.xyz
     service: http://bite-monitor:3000
+  - hostname: metric.bite-sized.xyz
+    service: http://bite-metric:3000
   # deploy webhook
   - hostname: deploy.bite-sized.xyz
     service: http://deploy-webhook:9000

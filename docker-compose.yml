@@ -267,6 +267,7 @@ services:
       - bite-api
       - bite-web
       - deploy-webhook
+      - bite-metric
     restart: unless-stopped
 
   # === 모니터링 ===
@@ -301,6 +302,32 @@ services:
       # writes to infra/logs/ which is within the shared $HOME path.
       - ./logs:/logs:ro
       - /Users/bite-server/.ssh/deploy_ed25519:/root/.ssh/deploy_ed25519:ro
+      - ./mysql/ca.pem:/etc/ssl/mysql-ca.pem:ro
+    networks:
+      - bite-network
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # === ML 메트릭 대시보드 ===
+  bite-metric:
+    image: ghcr.io/bite-sized-knowledge/bite-metric:latest
+    build: ../bite-metric
+    container_name: bite-metric
+    ports:
+      - "127.0.0.1:3003:3000"
+    env_file:
+      - .env
+    environment:
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_NAME=bite
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - QDRANT_URL=http://qdrant:6333
+      - QDRANT_API_KEY=${QDRANT_API_KEY}
+    volumes:
       - ./mysql/ca.pem:/etc/ssl/mysql-ca.pem:ro
     networks:
       - bite-network
