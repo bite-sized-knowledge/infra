@@ -34,20 +34,6 @@ services:
     networks:
       - bite-network
 
-  qdrant-dev:
-    image: qdrant/qdrant:latest
-    container_name: bite-qdrant-dev
-    ports:
-      - "127.0.0.1:6335:6333"
-      - "127.0.0.1:6336:6334"
-    environment:
-      - QDRANT__SERVICE__API_KEY=${QDRANT_API_KEY}
-    volumes:
-      - qdrant_dev_data:/qdrant/storage
-    restart: unless-stopped
-    networks:
-      - bite-network
-
   redis:
     image: redis:7-alpine
     container_name: bite-redis
@@ -211,10 +197,10 @@ services:
       - GOOGLE_CLIENT_ID=${DEV_GOOGLE_CLIENT_ID}
       - GOOGLE_CLIENT_SECRET=${DEV_GOOGLE_CLIENT_SECRET}
       - RECSYS_BASE_URL=http://recsys-api:8001
+      - RECSYS_API_KEY=${RECSYS_API_KEY}
+      - RECSYS_SEARCH_ENABLED=true
       - RESEND_API_KEY=${RESEND_API_KEY}
       - EMAIL_FROM=${EMAIL_FROM}
-      - QDRANT_URL=http://qdrant-dev:6333
-      - QDRANT_API_KEY=${QDRANT_API_KEY}
     networks:
       - bite-network
     restart: unless-stopped
@@ -358,7 +344,6 @@ services:
 volumes:
   mysql_data:
   qdrant_data:
-  qdrant_dev_data:
   redis_data:
 
 networks:
