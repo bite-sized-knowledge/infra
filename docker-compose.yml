@@ -241,10 +241,13 @@ services:
     container_name: bite-deploy-webhook
     environment:
       - DEPLOY_TOKEN=${DEPLOY_TOKEN}
-      - COMPOSE_PATH=/infra
+      # path-mirror: 컨테이너 cwd를 호스트 실경로와 동일하게 둬야
+      # `docker compose config`가 풀어낸 상대 mount 경로가 host docker
+      # daemon에서도 valid하다. CLAUDE.md 함정 섹션 참고.
+      - COMPOSE_PATH=/Users/bite-server/projects/infra
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - .:/infra:ro
+      - /Users/bite-server/projects/infra:/Users/bite-server/projects/infra:ro
       - /Users/bite-server/.docker/config.json:/root/.docker/config.json:ro
       # Dedicated SSH deploy key used by the wake-and-rebuild strategy
       # (harvest-post). Container SSHs into the Mac host as bite-server,
