@@ -24,6 +24,8 @@ jobs:
           - harvester-go
           - recsys-serving
           - recommender
+          - bite-monitor
+          - bite-metric
 
     steps:
       - name: Delete untagged versions
