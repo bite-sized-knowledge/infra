@@ -5,7 +5,30 @@
 ## Docker 컨텍스트
 
 - Apple Silicon: **`colima` 컨텍스트 사용**. `docker context use colima` 확인 필수.
-- Cloudflare tunnel 통해 외부 접근. 모든 서비스는 `0.0.0.0` 바인딩.
+- Cloudflare tunnel 통해 외부 접근.
+- **컨테이너 내부 listen은 `0.0.0.0`** (cloudflared가 docker network 안에서 hostname:port로 접근하기 때문).
+- **호스트 포트 매핑은 모두 `127.0.0.1:`로 좁힘** (mysql/qdrant/bite-api/bite-web 모두). cloudflared는 host port를 거치지 않고 docker network DNS(`bite-api:8080` 등)로 직접 붙으므로 외부에 host port를 열 필요 없음. 콜리마/Mac에서 직접 디버깅하려면 `127.0.0.1:` 통해 접근.
+
+## 시크릿 관리 (Doppler 강제)
+
+- `.env`는 **결과물**이며 **직접 수정 금지**. Doppler 프로젝트 `infra/prd`가 source of truth.
+- 모든 시크릿 변경은 Doppler 대시보드(또는 `doppler secrets set`) 후 `scripts/doppler-sync.sh` 실행 → `.env` 재생성.
+- `.env`는 `.gitignore` 등재 + git history에 들어간 적 없음 (검증 완료). 회전 작업 불필요. private repo 유지.
+- 비-시크릿 config(DB_HOST, ENVIRONMENT 등)는 `doppler-sync.sh`의 heredoc에 추가.
+
+## Docker 로깅 정책
+
+- `docker-compose.yml` 상단 `x-logging` anchor로 모든 서비스에 일괄 적용.
+- json-file 드라이버, `max-size: 50m`, `max-file: 5`, compress 활성. 컨테이너당 최대 ~250MB 보존.
+- 새 서비스 추가 시 `logging: *default-logging` 한 줄 잊지 말 것.
+
+## MySQL 운영 튜닝 (`mysql/conf.d/tuning.cnf`)
+
+- `innodb_buffer_pool_size = 1G` (호스트 16GB, 다른 서비스와 공존하는 환경 고려).
+- `max_connections = 200`, `max_allowed_packet = 64M`.
+- `slow_query_log = 1`, `long_query_time = 1`, `slow_query_log_file = /var/lib/mysql/slow.log` (mysql_data 볼륨에 영속).
+- `default_time_zone = '+09:00'` (KST 기본).
+- charset만 utf8mb4 강제, **collation은 강제하지 않음** (article 테이블이 utf8mb4_bin 사용 중이라 충돌 회피).
 
 ## ⚠️ MySQL 마이그레이션 (반복 실수)
 
@@ -109,12 +132,14 @@ deploy-webhook`으로 컨테이너만 재기동해 inode를 다시 잡아야 한
 
 ## 컨테이너 매트릭스
 
-- `bite-mysql` / `bite-mysql-dev`: 5.7. 두 인스턴스 별도. dev DB 이름은 `bite_dev`.
-- `bite-qdrant` (6333/6334) / `bite-qdrant-dev` (6335/6336).
-- `bite-api` (8080 latest) / `bite-api-dev` (8081 dev).
-- `bite-web` (3000 latest) / `bite-web-dev` (3001 dev).
-- `recsys-api` (8001).
-- `bite-tunnel` (cloudflared).
+- `bite-mysql`: **MySQL 8.0**. 단일 인스턴스에 `bite`(prod) + `bite_dev`(dev) DB 공존. host port `127.0.0.1:3306`.
+- `bite-qdrant`: 6333(REST)/6334(gRPC), host port 모두 `127.0.0.1`.
+- `bite-api` (8080 latest) / `bite-api-dev` (8081 dev). host port `127.0.0.1:`.
+- `bite-web` (3000 latest) / `bite-web-dev` (3001 dev). host port `127.0.0.1:`.
+- `recsys-api` (8001), host port `127.0.0.1:8001`.
+- `bite-redis` (6379), host port `127.0.0.1:6379`.
+- `bite-monitor` (3002→3000), `bite-metric` (3003→3000) — 둘 다 `127.0.0.1:`.
+- `bite-tunnel` (cloudflared) — host port 노출 없음 (docker network 내부 호출만).
 
 ## 배포 흐름
 

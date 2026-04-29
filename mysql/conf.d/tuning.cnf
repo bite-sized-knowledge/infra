@@ -1,0 +1,29 @@
+[mysqld]
+# Buffer pool — host: M1 Mac mini 16GB, MySQL coexists with Qdrant/Redis/web/recsys.
+# 1GB는 현재 데이터(75MB scale)에 충분히 여유 있고 호스트 다른 서비스 압박 없음.
+innodb_buffer_pool_size = 1G
+innodb_log_file_size    = 256M
+innodb_flush_method     = O_DIRECT
+
+# Connection ceiling — 여러 서비스가 각자 pool 보유.
+# bite-api 25 + bite-api-dev 25 + recsys 50 + recommender 25 + monitor 10 + metric 10
+# + backup 5 + headroom → 200으로 잡음.
+max_connections        = 200
+
+# Charset (article 테이블은 utf8mb4_bin, 그 외 utf8mb4_unicode_ci.
+# server-default는 collation 강제하지 말고 charset만 utf8mb4로 가둠.)
+character-set-server   = utf8mb4
+skip-character-set-client-handshake = OFF
+
+# Slow query log — long_query_time 1초 이상은 hot path가 아니어야 함.
+slow_query_log         = 1
+long_query_time        = 1
+slow_query_log_file    = /var/lib/mysql/slow.log
+log_queries_not_using_indexes = 0
+
+# Timezone
+default_time_zone      = '+09:00'
+
+# Operational
+max_allowed_packet     = 64M
+group_concat_max_len   = 4M
