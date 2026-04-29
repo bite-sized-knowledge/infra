@@ -67,6 +67,46 @@ daemon 입장에서도 그대로 valid하다.
   "http://deploy-webhook:9000/deploy?service=<svc>" -H "Authorization: Bearer $TOKEN"`
   의 응답 body를 보면 docker daemon 에러 원문이 그대로 들어있다.
 
+## ⚠️ deploy-webhook의 docker context 우회 (반복 실수)
+
+webhook 컨테이너는 `/var/run/docker.sock`을 직접 마운트해 host daemon에
+붙는다. 그런데 컨테이너 안 docker CLI는 명령 실행 전에 먼저
+`/root/.docker/config.json`의 `currentContext`를 해석하려 시도한다. 호스트
+설정이 `currentContext: "colima"`라면 CLI는 colima context의 metadata 파일
+(`/root/.docker/contexts/meta/<hash>/meta.json`)을 찾는데 컨테이너 안에는
+존재하지 않으므로 모든 docker 명령이 다음 에러로 실패한다:
+
+```
+unable to resolve docker endpoint: context "colima": context not found:
+open /root/.docker/contexts/meta/<hash>/meta.json: no such file or directory
+```
+
+증상: webhook 통한 모든 deploy가 `pull failed: exit status 1` 또는
+`green start failed`로 깨짐. 호스트에서 `docker pull ...`은 정상 동작
+(호스트 daemon은 본인의 콘텍스트 metadata가 있음).
+
+해결: `DOCKER_HOST=unix:///var/run/docker.sock`을 webhook environment에
+명시해 currentContext 해석 자체를 우회. socket이 곧 endpoint가 된다.
+
+```yaml
+deploy-webhook:
+  environment:
+    - DOCKER_HOST=unix:///var/run/docker.sock
+```
+
+부가 함정 (같은 사고에서 드러남): `/Users/bite-server/.docker/config.json`을
+readonly bind mount로 받는데, 호스트에서 atomic replace(예: `mv` 또는
+`cat > file`)로 토큰을 회전하면 새 inode가 생기고 컨테이너는 옛 inode를
+계속 들고 있어 truncated/stale view를 본다 ("unexpected EOF" → unauthorized).
+config.json을 갱신한 뒤에는 `docker compose up -d --force-recreate
+deploy-webhook`으로 컨테이너만 재기동해 inode를 다시 잡아야 한다.
+
+진단 명령:
+- `docker exec bite-deploy-webhook docker pull ghcr.io/bite-sized-knowledge/<svc>:latest`
+  으로 webhook 안에서 직접 재현하면 위 두 에러 중 어느 것인지 즉시 갈린다.
+- `docker exec bite-deploy-webhook wc -c /root/.docker/config.json`을
+  호스트의 `wc -c ~/.docker/config.json`과 비교해 stale inode인지 확인.
+
 ## 컨테이너 매트릭스
 
 - `bite-mysql` / `bite-mysql-dev`: 5.7. 두 인스턴스 별도. dev DB 이름은 `bite_dev`.
