@@ -7,7 +7,11 @@
 - Apple Silicon: **`colima` 컨텍스트 사용**. `docker context use colima` 확인 필수.
 - Cloudflare tunnel 통해 외부 접근.
 - **컨테이너 내부 listen은 `0.0.0.0`** (cloudflared가 docker network 안에서 hostname:port로 접근하기 때문).
-- **호스트 포트 매핑은 모두 `127.0.0.1:`로 좁힘** (mysql/qdrant/bite-api/bite-web 모두). cloudflared는 host port를 거치지 않고 docker network DNS(`bite-api:8080` 등)로 직접 붙으므로 외부에 host port를 열 필요 없음. 콜리마/Mac에서 직접 디버깅하려면 `127.0.0.1:` 통해 접근.
+- **호스트 포트 매핑 정책**:
+  - cloudflared로만 외부 노출되는 서비스(bite-api / bite-web / monitor / metric / recsys / redis): **`127.0.0.1:`로 좁힘**. cloudflared는 host port를 거치지 않고 docker network DNS(`bite-api:8080` 등)로 직접 붙으므로 외부에 host port를 열 필요 없음.
+  - **⚠️ mysql / qdrant는 `0.0.0.0:` 바인딩 필수** (예외). harvest_post가 GPU 머신(192.168.219.104 ↔ Mac LAN IP) 외부에서 LAN을 통해 직접 mysql/qdrant에 붙는 유일한 외부 클라이언트라서 LAN 노출이 필요. `127.0.0.1:`로 좁히면 매 cron 사이클이 `(2003) Can't connect to MySQL server` 로 즉시 죽고 article_queue가 무한정 쌓임. 사고 이력: commit `b5dd42c`가 이걸 좁혀서 60시간(20 사이클) 동안 큐가 248건으로 동결됨.
+  - 보안: 외부 IP(124.59.179.22)에는 라우터에서 SSH(3475)만 포워딩. 3306/6333/6334는 인터넷 차단됨. LAN(192.168.219.0/24) 노출은 가정망 한정 + mysql 인증 + qdrant `QDRANT__SERVICE__API_KEY` 강제로 수용.
+  - **호스트 바인딩을 다시 좁히려면 먼저 GPU 경로(`harvest_post/run.sh`의 DB_HOST가 LAN IP를 가리키는지)를 우회 처리한 뒤에만 가능.** 무심코 `127.0.0.1:`로 돌리지 말 것.
 
 ## 시크릿 관리 (Doppler 강제)
 
