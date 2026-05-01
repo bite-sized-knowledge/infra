@@ -7,10 +7,12 @@ CREATE TABLE IF NOT EXISTS member (
     gender     VARCHAR(10) NULL,
     status     VARCHAR(10) NULL,
     role       VARCHAR(20) NULL,
+    device_id  CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (member_id),
-    UNIQUE KEY (email)
+    UNIQUE KEY (email),
+    UNIQUE KEY uq_member_device_id (device_id)
 );
 
 CREATE TABLE IF NOT EXISTS interest (
