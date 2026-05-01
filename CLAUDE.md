@@ -149,3 +149,12 @@ deploy-webhook`으로 컨테이너만 재기동해 inode를 다시 잡아야 한
 ## 백업
 
 - `backup/` nightly MySQL dump.
+
+## 스케줄 (launchd)
+
+- **recommender daily**: `scripts/com.bite.recommender.daily.plist` → `~/Library/LaunchAgents/`. 매일 01:00 (host TZ) `scripts/recommender-cron.sh` 실행 → `docker compose --profile batch run --rm recommender`. 로그: `~/logs/recommender/<date>.log` + launchd stdio: `~/logs/recommender/launchd.{out,err}`.
+- 등록/해제:
+  - `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.bite.recommender.daily.plist`
+  - `launchctl bootout gui/$(id -u)/com.bite.recommender.daily`
+- 즉시 1회 트리거 검증: `launchctl kickstart -k gui/$(id -u)/com.bite.recommender.daily`
+- plist 변경 후엔 bootout → bootstrap 재등록 필수.
