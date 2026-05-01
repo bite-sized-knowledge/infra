@@ -9,8 +9,12 @@ services:
   mysql:
     image: mysql:8.0
     container_name: bite-mysql
+    # ⚠️ 0.0.0.0 바인딩 필수 — 좁히지 말 것.
+    # GPU 머신(192.168.219.x)의 harvest_post가 LAN을 통해 직접 붙는다.
+    # 127.0.0.1로 좁히면 article_queue가 무한정 쌓인다 (commit b5dd42c 사고).
+    # 외부 노출은 라우터에서 차단됨 (인터넷 → 3306 포워딩 없음). CLAUDE.md 참고.
     ports:
-      - "127.0.0.1:3306:3306"
+      - "0.0.0.0:3306:3306"
     env_file:
       - .env
     volumes:
@@ -31,9 +35,11 @@ services:
   qdrant:
     image: qdrant/qdrant:latest
     container_name: bite-qdrant
+    # ⚠️ 0.0.0.0 바인딩 필수 — mysql과 동일 사유. GPU의 harvest_post가 LAN으로 직접 붙음.
+    # API key 강제(아래 QDRANT__SERVICE__API_KEY)라 LAN 노출 OK. CLAUDE.md 참고.
     ports:
-      - "127.0.0.1:6333:6333"
-      - "127.0.0.1:6334:6334"
+      - "0.0.0.0:6333:6333"
+      - "0.0.0.0:6334:6334"
     environment:
       - QDRANT__SERVICE__API_KEY=${QDRANT_API_KEY}
     volumes:
@@ -176,7 +182,11 @@ services:
   # === 운영계 웹 ===
   bite-web:
     image: ghcr.io/bite-sized-knowledge/bite-web:latest
-    build: ../bite-web
+    build:
+      context: ../bite-web
+      args:
+        NEXT_PUBLIC_GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID}
+        NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
     container_name: bite-web
     ports:
       - "127.0.0.1:3000:3000"
@@ -227,7 +237,11 @@ services:
   # === 개발계 웹 ===
   bite-web-dev:
     image: ghcr.io/bite-sized-knowledge/bite-web:dev
-    build: ../bite-web
+    build:
+      context: ../bite-web
+      args:
+        NEXT_PUBLIC_GITHUB_CLIENT_ID: ${DEV_GITHUB_CLIENT_ID}
+        NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${DEV_GOOGLE_CLIENT_ID}
     container_name: bite-web-dev
     ports:
       - "127.0.0.1:3001:3000"
