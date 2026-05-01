@@ -13,7 +13,7 @@ ingress:
   - hostname: dev-api.bite-sized.xyz
     service: http://bite-api-dev:8080
   - hostname: dev.bite-sized.xyz
-    service: http://host.docker.internal:3100
+    service: http://bite-web-dev:3000
   # 모니터링
   - hostname: monitor.bite-sized.xyz
     service: http://bite-monitor:3000
