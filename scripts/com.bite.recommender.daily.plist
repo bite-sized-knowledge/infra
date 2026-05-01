@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.bite.recommender.daily</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/bite-server/projects/infra/scripts/recommender-cron.sh</string>
+    </array>
+
+    <!-- 매일 01:00 (KST 가정 — host TZ 따름) -->
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>1</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/Users/bite-server/logs/recommender/launchd.out</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/bite-server/logs/recommender/launchd.err</string>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <!-- 잠자기 중 시각이 지나도 깨어난 직후 catch-up 하지는 않음 (Mac mini always-on 가정) -->
+</dict>
+</plist>

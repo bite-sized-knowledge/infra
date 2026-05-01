@@ -159,8 +159,11 @@ services:
       RDS_USER: ${RDS_USER:-bite-dev}
       RDS_PASSWORD: ${RDS_PASSWORD:-}
       RDS_PORT: ${RDS_PORT:-3306}
+      MYSQL_CA_PATH: /etc/ssl/mysql-ca.pem
       QDRANT_ENDPOINT: ${QDRANT_ENDPOINT:-http://qdrant:6333}
       QDRANT_API: ${QDRANT_API_KEY}
+    volumes:
+      - ./mysql/ca.pem:/etc/ssl/mysql-ca.pem:ro
     depends_on:
       mysql:
         condition: service_healthy
